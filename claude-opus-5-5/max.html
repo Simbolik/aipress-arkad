@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON//ASTEROIDS</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #02000a; }
+  canvas { display: block; }
+  /* CRT-scanlines + vinjett */
+  body::after {
+    content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;
+    background:
+      repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,.22) 3px, rgba(0,0,0,0) 4px),
+      radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.7) 100%);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  'use strict';
+
+  /* ===== Grundinställningar ===== */
+  const cv = document.getElementById('game');
+  const ctx = cv.getContext('2d');
+  const TAU = Math.PI * 2;
+  const FONT = 'Consolas, Menlo, "DejaVu Sans Mono", "Courier New", monospace';
+  const C = { cyan: '#00f0ff', pink: '#ff2a6d', purple: '#b967ff', yellow: '#f9f002', green: '#39ff14', orange: '#ff8a00' };
+  const AST_COLORS = [C.pink, C.purple, C.orange, C.green];
+  const SIZES = { 3: { r: 50, pts: 20, sp: [35, 75] }, 2: { r: 28, pts: 50, sp: [60, 115] }, 1: { r: 15, pts: 100, sp: [90, 165] } };
+  const SHIP_SEGS = [[18, 0, -12, -11], [-12, -11, -7, 0], [-7, 0, -12, 11], [-12, 11, 18, 0]];
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const pad = n => String(n).padStart(6, '0');
+
+  let W = 0, H = 0, DPR = 1, horizon = 0, bg = null, gridGrad = null, stars = [];
+  let state = 'title', paused = false, time = 0, wtime = 0, last = 0;
+  let score = 0, hi = 0, lives = 3, wave = 1, nextLife = 10000, newRecord = false, hiAtStart = 0;
+  let waveT = 0, overT = 0, shake = 0, glitch = 0, thrustAcc = 0, banner = { text: '', t: 0, max: 1 };
+  let asteroids = [], bullets = [], particles = [], rings = [], debris = [], texts = [];
+  const keys = {};
+  const ship = { x: 0, y: 0, vx: 0, vy: 0, a: -Math.PI / 2, r: 12, inv: 0, alive: false, cool: 0, thrust: false, respawn: 0 };
+
+  try { hi = parseInt(localStorage.getItem('neonAsteroidsHi'), 10) || 0; } catch (e) {}
+  function saveHi() { try { localStorage.setItem('neonAsteroidsHi', String(hi)); } catch (e) {} }
+
+  /* ===== Ljud (Web Audio, inga filer) ===== */
+  let actx = null, master = null, noiseBuf = null, thrustGain = null, thrustOn = false, muted = false;
+
+  function initAudio() {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      actx = new AC();
+      master = actx.createDynamicsCompressor();
+      master.connect(actx.destination);
+      noiseBuf = actx.createBuffer(1, actx.sampleRate, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = actx.createBufferSource(), f = actx.createBiquadFilter();
+      src.buffer = noiseBuf; src.loop = true;
+      f.type = 'bandpass'; f.frequency.value = 320; f.Q.value = 0.8;
+      thrustGain = actx.createGain(); thrustGain.gain.value = 0;
+      src.connect(f); f.connect(thrustGain); thrustGain.connect(master); src.start();
+    }
+    if (actx.state === 'suspended') actx.resume();
+  }
+
+  function tone(f1, f2, dur, type, vol, delay = 0) {
+    if (!actx || muted) return;
+    const t = actx.currentTime + delay, o = actx.createOscillator(), g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f1, t);
+    o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  function noise(dur, vol, freq) {
+    if (!actx || muted) return;
+    const t = actx.currentTime, s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    s.buffer = noiseBuf; s.loop = true;
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(freq, t);
+    f.frequency.exponentialRampToValueAtTime(50, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t); s.stop(t + dur + 0.05);
+  }
+
+  const sfx = {
+    shoot: () => tone(1100, 280, 0.09, 'square', 0.03),
+    boom: size => { noise(0.25 + size * 0.15, 0.12 + size * 0.06, 700 + size * 500); tone(160 / size, 40, 0.3, 'sine', 0.12); },
+    die: () => { noise(1.3, 0.35, 1500); tone(320, 30, 1.1, 'sawtooth', 0.1); },
+    wave: () => { tone(330, 660, 0.15, 'triangle', 0.08); tone(660, 1320, 0.2, 'triangle', 0.08, 0.13); },
+    life: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.12, 'square', 0.05, i * 0.09)),
+    start: () => tone(150, 1400, 0.45, 'sawtooth', 0.06)
+  };
+
+  /* ===== Bakgrund: himmel, skyline och neonrutnät ===== */
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    horizon = Math.round(H * 0.7);
+    buildBackground();
+  }
+
+  function buildBackground() {
+    bg = document.createElement('canvas');
+    bg.width = cv.width; bg.height = cv.height;
+    const g = bg.getContext('2d'), hr = horizon / H;
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const sky = g.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#02000a');
+    sky.addColorStop(hr * 0.6, '#0c0322');
+    sky.addColorStop(hr, '#2e0b52');
+    sky.addColorStop(Math.min(1, hr + 0.003), '#0b0219');
+    sky.addColorStop(1, '#030008');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+
+    for (let layer = 0; layer < 2; layer++) {             // 0 = bortre stad, 1 = närmare stad
+      if (layer === 1) {                                  // neondis mellan lagren
+        const glow = g.createLinearGradient(0, horizon - 160, 0, horizon);
+        glow.addColorStop(0, 'rgba(255,42,109,0)');
+        glow.addColorStop(1, 'rgba(255,42,109,.32)');
+        g.fillStyle = glow; g.fillRect(0, horizon - 160, W, 160);
+      }
+      for (let x = -20; x < W + 20;) {
+        const bw = layer ? rand(24, 70) : rand(16, 46), bh = layer ? rand(25, 150) : rand(40, 125), top = horizon - bh;
+        g.fillStyle = layer ? '#0a0219' : '#1b0838';
+        g.fillRect(x, top, bw, bh);
+        for (let wy = top + 6; wy < horizon - 5; wy += 7)
+          for (let wx = x + 4; wx < x + bw - 4; wx += 6)
+            if (Math.random() < (layer ? 0.16 : 0.05)) {
+              g.globalAlpha = rand(0.25, 0.85) * (layer ? 1 : 0.5);
+              g.fillStyle = pick([C.cyan, C.pink, C.yellow, C.purple]);
+              g.fillRect(wx, wy, 2, 3);
+            }
+        g.globalAlpha = 1;
+        if (layer) {
+          g.fillStyle = Math.random() < 0.5 ? 'rgba(0,240,255,.55)' : 'rgba(255,42,109,.55)';
+          g.fillRect(x, top, bw, 1);
+          if (Math.random() < 0.15) {                     // neonskylt
+            const col = pick([C.cyan, C.pink, C.purple, C.yellow]);
+            g.shadowColor = col; g.shadowBlur = 10; g.fillStyle = col;
+            g.fillRect(x + bw * 0.3, top + 10, 3, Math.min(bh * 0.45, 50));
+            g.shadowBlur = 0;
+          }
+          if (Math.random() < 0.2) {                      // antenn med lampa
+            g.fillStyle = '#0a0219'; g.fillRect(x + bw / 2 - 1, top - 16, 2, 16);
+            g.fillStyle = C.pink; g.fillRect(x + bw / 2 - 1.5, top - 18, 3, 3);
+          }
+        }
+        x += bw + rand(0, 5);
+      }
+    }
+    g.shadowColor = C.pink; g.shadowBlur = 14; g.strokeStyle = C.pink; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, horizon); g.lineTo(W, horizon); g.stroke();
+
+    gridGrad = ctx.createLinearGradient(0, horizon, 0, H);
+    gridGrad.addColorStop(0, 'rgba(255,42,109,0)');
+    gridGrad.addColorStop(0.3, 'rgba(255,42,109,.28)');
+    gridGrad.addColorStop(1, 'rgba(185,103,255,.6)');
+
+    stars = [];
+    const maxY = Math.max(40, horizon - 190);
+    for (let i = 0, n = Math.floor(W * maxY / 4000); i < n; i++) stars.push({
+      x: Math.random() * W, y: Math.random() * maxY, s: Math.random() < 0.85 ? 1 : 2,
+      p: rand(0, TAU), sp: rand(0.5, 3), c: Math.random() < 0.7 ? '#fff' : pick([C.cyan, C.pink, C.purple])
+    });
+  }
+
+  function drawBackground() {
+    ctx.drawImage(bg, 0, 0, W, H);
+    for (const s of stars) {
+      ctx.globalAlpha = 0.3 + 0.7 * Math.abs(Math.sin(s.p + time * s.sp));
+      ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, s.s, s.s);
+    }
+    ctx.globalAlpha = 1;
+    const depth = H - horizon, cx = W / 2, off = (wtime * 0.7) % 1;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, horizon + 1, W, depth); ctx.clip();
+    ctx.strokeStyle = gridGrad; ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let i = -24; i <= 24; i++) { ctx.moveTo(cx, horizon); ctx.lineTo(cx + i * W / 9, H); }
+    for (let k = 1; k < 40; k++) {
+      const y = horizon + depth / (k - off);
+      if (y <= H + 2) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* ===== Spellogik ===== */
+  function wrap(o, m) {
+    if (o.x < -m) o.x += W + 2 * m; else if (o.x > W + m) o.x -= W + 2 * m;
+    if (o.y < -m) o.y += H + 2 * m; else if (o.y > H + m) o.y -= H + 2 * m;
+  }
+
+  function makeAsteroid(x, y, size, color) {
+    const s = SIZES[size], dir = rand(0, TAU), spd = rand(s.sp[0], s.sp[1]) * (1 + (wave - 1) * 0.07);
+    const verts = [], n = 9 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < n; i++) verts.push(rand(0.72, 1.12));
+    return { x, y, vx: Math.cos(dir) * spd, vy: Math.sin(dir) * spd, r: s.r, size, a: rand(0, TAU),
+             spin: rand(-1.2, 1.2), verts, color: color || pick(AST_COLORS) };
+  }
+
+  function spawnWave() {
+    for (let i = 0, n = Math.min(3 + wave, 11); i < n; i++) {
+      let x, y, tries = 0;
+      do {
+        if (Math.random() < 0.5) { x = Math.random() < 0.5 ? -45 : W + 45; y = rand(0, H); }
+        else { x = rand(0, W); y = Math.random() < 0.5 ? -45 : H + 45; }
+      } while (++tries < 20 && Math.hypot(x - ship.x, y - ship.y) < 220);
+      asteroids.push(makeAsteroid(x, y, 3));
+    }
+  }
+
+  function burst(x, y, color, count, speed, life) {
+    for (let i = 0; i < count; i++) {
+      const a = rand(0, TAU), s = rand(0.15, 1) * speed;
+      particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.4, 1) * life, max: life, color, size: rand(1, 2.6) });
+    }
+  }
+  function ring(x, y, r0, max, dur, color) { rings.push({ x, y, r0, max, t: 0, dur, color }); }
+  function showBanner(text, dur) { banner = { text, t: dur, max: dur }; }
+
+  function addScore(p) {
+    score += p;
+    if (score > hi) hi = score;
+    if (score >= nextLife) {
+      nextLife += 10000; lives++;
+      texts.push({ x: ship.x, y: ship.y - 34, s: '+1 LIV', life: 1.6, color: C.green, size: 22 });
+      sfx.life();
+    }
+  }
+
+  function resetShip() {
+    Object.assign(ship, { x: W / 2, y: H / 2, vx: 0, vy: 0, a: -Math.PI / 2, inv: 2.5, alive: true, cool: 0.2, thrust: false });
+    ring(ship.x, ship.y, 70, 6, 0.5, C.cyan);
+  }
+
+  function startGame() {
+    for (const o of asteroids) { burst(o.x, o.y, o.color, 14, 160, 0.8); ring(o.x, o.y, 5, o.r * 1.5, 0.4, o.color); }
+    asteroids = []; bullets = []; debris = [];
+    score = 0; lives = 3; wave = 1; nextLife = 10000; newRecord = false; hiAtStart = hi;
+    state = 'play'; paused = false; waveT = 1.6; glitch = 0.3;
+    resetShip();
+    showBanner('VÅG 1', 2);
+    sfx.start();
+  }
+
+  function fire() {
+    const c = Math.cos(ship.a), s = Math.sin(ship.a);
+    bullets.push({ x: ship.x + c * 18, y: ship.y + s * 18, vx: ship.vx + c * 650, vy: ship.vy + s * 650, life: 0.85 });
+    sfx.shoot();
+  }
+
+  function destroyAsteroid(i) {
+    const o = asteroids[i], pts = SIZES[o.size].pts;
+    asteroids.splice(i, 1);
+    addScore(pts);
+    burst(o.x, o.y, o.color, 10 + o.size * 9, 70 + o.size * 45, 0.9);
+    burst(o.x, o.y, '#fff', 3 + o.size * 3, 160, 0.45);
+    ring(o.x, o.y, o.r * 0.4, o.r * 1.9, 0.45, o.color);
+    for (let k = 0; k <= o.size; k++)
+      debris.push({ x: o.x, y: o.y, vx: rand(-100, 100), vy: rand(-100, 100), a: rand(0, TAU), spin: rand(-6, 6),
+                    len: rand(5, 11) * o.size, life: rand(0.5, 1), color: o.color });
+    texts.push({ x: o.x, y: o.y, s: '+' + pts, life: 0.9, color: o.color, size: 15 });
+    shake = Math.max(shake, o.size * 2.5);
+    if (o.size > 1) for (let k = 0; k < 2; k++) {
+      const c = makeAsteroid(o.x, o.y, o.size - 1, o.color);
+      c.vx += o.vx * 0.35; c.vy += o.vy * 0.35;
+      asteroids.push(c);
+    }
+    sfx.boom(o.size);
+  }
+
+  function killShip() {
+    ship.alive = false; ship.thrust = false; ship.respawn = 1.8; lives--;
+    burst(ship.x, ship.y, C.cyan, 60, 260, 1.4);
+    burst(ship.x, ship.y, C.pink, 30, 180, 1.1);
+    burst(ship.x, ship.y, '#fff', 20, 330, 0.6);
+    ring(ship.x, ship.y, 10, 140, 0.7, C.cyan);
+    const c = Math.cos(ship.a), s = Math.sin(ship.a);
+    for (const [x1, y1, x2, y2] of SHIP_SEGS) {
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, wx = ship.x + mx * c - my * s, wy = ship.y + mx * s + my * c;
+      const out = Math.atan2(wy - ship.y, wx - ship.x), v = rand(40, 120);
+      debris.push({ x: wx, y: wy, vx: Math.cos(out) * v + ship.vx * 0.3, vy: Math.sin(out) * v + ship.vy * 0.3,
+                    a: Math.atan2(y2 - y1, x2 - x1) + ship.a, spin: rand(-4, 4), len: Math.hypot(x2 - x1, y2 - y1), life: 2, color: C.cyan });
+    }
+    shake = 16; glitch = 0.45;
+    sfx.die();
+    if (lives <= 0) { state = 'over'; overT = 0; newRecord = score > hiAtStart; saveHi(); }
+  }
+
+  function step(arr, fn) {
+    for (let i = arr.length - 1; i >= 0; i--) if (!fn(arr[i])) { arr[i] = arr[arr.length - 1]; arr.pop(); }
+  }
+
+  function update(dt) {
+    wtime += dt;
+    if (state === 'over') overT += dt;
+
+    if (state === 'play') {
+      if (ship.alive) {
+        if (keys.ArrowLeft) ship.a -= 4.6 * dt;
+        if (keys.ArrowRight) ship.a += 4.6 * dt;
+        ship.thrust = !!keys.ArrowUp;
+        const c = Math.cos(ship.a), s = Math.sin(ship.a);
+        if (ship.thrust) {
+          ship.vx += c * 340 * dt; ship.vy += s * 340 * dt;
+          for (thrustAcc += dt * 60; thrustAcc >= 1; thrustAcc--) {
+            const ang = ship.a + Math.PI + rand(-0.35, 0.35), v = rand(80, 220);
+            particles.push({ x: ship.x - c * 9, y: ship.y - s * 9, vx: Math.cos(ang) * v + ship.vx * 0.5, vy: Math.sin(ang) * v + ship.vy * 0.5,
+                             life: rand(0.15, 0.4), max: 0.4, color: Math.random() < 0.6 ? C.pink : C.yellow, size: rand(1, 2.2) });
+          }
+        }
+        const f = Math.exp(-(keys.ArrowDown ? 3.5 : 0.7) * dt);
+        ship.vx *= f; ship.vy *= f;
+        const sp = Math.hypot(ship.vx, ship.vy);
+        if (sp > 440) { ship.vx *= 440 / sp; ship.vy *= 440 / sp; }
+        ship.x += ship.vx * dt; ship.y += ship.vy * dt;
+        wrap(ship, ship.r);
+        ship.cool -= dt;
+        if (ship.inv > 0) ship.inv -= dt;
+        if (keys.Space && ship.cool <= 0 && bullets.length < 14) { fire(); ship.cool = 0.15; }
+      } else if (lives > 0) {
+        ship.respawn -= dt;
+        if (ship.respawn <= 0) resetShip();
+      }
+      if (waveT > 0) { waveT -= dt; if (waveT <= 0) spawnWave(); }
+      else if (asteroids.length === 0) { wave++; waveT = 2; showBanner('VÅG ' + wave, 2.2); sfx.wave(); }
+    }
+
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.x += b.vx * dt; b.y += b.vy * dt; wrap(b, 0);
+      if ((b.life -= dt) <= 0) bullets.splice(i, 1);
+    }
+    for (const o of asteroids) { o.x += o.vx * dt; o.y += o.vy * dt; o.a += o.spin * dt; wrap(o, o.r); }
+
+    if (state === 'play') {
+      for (let i = asteroids.length - 1; i >= 0; i--) {
+        const o = asteroids[i];
+        const j = bullets.findIndex(b => (b.x - o.x) ** 2 + (b.y - o.y) ** 2 < o.r * o.r);
+        if (j >= 0) { bullets.splice(j, 1); destroyAsteroid(i); continue; }
+        if (ship.alive && ship.inv <= 0) {
+          const rr = o.r * 0.85 + ship.r;
+          if ((ship.x - o.x) ** 2 + (ship.y - o.y) ** 2 < rr * rr) { destroyAsteroid(i); killShip(); }
+        }
+      }
+    }
+
+    step(particles, p => {
+      const f = Math.exp(-2 * dt);
+      p.vx *= f; p.vy *= f; p.x += p.vx * dt; p.y += p.vy * dt;
+      return (p.life -= dt) > 0;
+    });
+    step(rings, r => (r.t += dt) < r.dur);
+    step(debris, d => { d.x += d.vx * dt; d.y += d.vy * dt; d.a += d.spin * dt; return (d.life -= dt) > 0; });
+    step(texts, t => { t.y -= 35 * dt; return (t.life -= dt) > 0; });
+
+    shake = Math.max(0, shake - 40 * dt);
+    if (glitch > 0) glitch -= dt;
+    if (banner.t > 0) banner.t -= dt;
+  }
+
+  /* ===== Ritning ===== */
+  function neonText(s, x, y, color, size, align = 'center', blur = 12) {
+    ctx.font = 'bold ' + size + 'px ' + FONT;
+    ctx.textAlign = align; ctx.textBaseline = 'middle';
+    ctx.shadowColor = color; ctx.shadowBlur = blur; ctx.fillStyle = color;
+    ctx.fillText(s, x, y);
+    ctx.shadowBlur = 0;
+  }
+
+  function glitchText(s, x, y, size, color) {
+    ctx.save();
+    ctx.font = '900 ' + size + 'px ' + FONT;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const g = Math.random() < 0.1, j = g ? rand(-10, 10) : 0, o = Math.max(2, size * 0.04);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,0,80,.75)'; ctx.fillText(s, x - o + j, y);
+    ctx.fillStyle = 'rgba(0,240,255,.75)'; ctx.fillText(s, x + o - j, y + (g ? rand(-3, 3) : 0));
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.shadowColor = color; ctx.shadowBlur = 24; ctx.fillStyle = '#fff';
+    ctx.fillText(s, x, y);
+    ctx.restore();
+  }
+
+  function glitchSlices(n, amt) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    for (let i = 0; i < n; i++) {
+      const h = Math.floor(rand(3, 36) * DPR), y = Math.floor(rand(0, cv.height - h)), dx = Math.round(rand(-amt, amt) * DPR);
+      ctx.drawImage(cv, 0, y, cv.width, h, dx, y, cv.width, h);
+      if (Math.random() < 0.4) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = Math.random() < 0.5 ? 'rgba(0,240,255,.12)' : 'rgba(255,42,109,.12)';
+        ctx.fillRect(0, y, cv.width, h);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawShip(x, y, a, sc, thrust) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(a); ctx.scale(sc, sc);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if (thrust) {
+      const fl = rand(12, 26);
+      ctx.shadowBlur = 18; ctx.shadowColor = C.pink; ctx.strokeStyle = C.pink; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-8, -5); ctx.lineTo(-8 - fl, 0); ctx.lineTo(-8, 5); ctx.stroke();
+      ctx.strokeStyle = C.yellow; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(-8, -2.5); ctx.lineTo(-8 - fl * 0.55, 0); ctx.lineTo(-8, 2.5); ctx.stroke();
+    }
+    ctx.shadowBlur = 16; ctx.shadowColor = C.cyan; ctx.strokeStyle = C.cyan; ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(0,240,255,.12)';
+    ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(-12, -11); ctx.lineTo(-7, 0); ctx.lineTo(-12, 11); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.shadowColor = C.pink; ctx.strokeStyle = C.pink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-1, -3.5); ctx.lineTo(-1, 3.5); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function astPath(o, k) {
+    const n = o.verts.length;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const ang = o.a + (i / n) * TAU, rr = o.r * o.verts[i] * k;
+      const px = o.x + Math.cos(ang) * rr, py = o.y + Math.sin(ang) * rr;
+      if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function drawAsteroids() {
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (const o of asteroids) {
+      ctx.fillStyle = 'rgba(8,2,22,.82)'; ctx.shadowBlur = 0;
+      astPath(o, 1); ctx.fill();
+      ctx.strokeStyle = o.color; ctx.shadowColor = o.color; ctx.shadowBlur = 14; ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 0.35; ctx.lineWidth = 1;
+      astPath(o, 0.55); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  function drawBullets() {
+    if (!bullets.length) return;
+    ctx.save();
+    ctx.strokeStyle = C.yellow; ctx.shadowColor = C.yellow; ctx.shadowBlur = 12;
+    ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (const b of bullets) { ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - b.vx * 0.018, b.y - b.vy * 0.018); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawParticles() {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.max);
+      ctx.strokeStyle = p.color; ctx.lineWidth = p.size;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.035, p.y - p.vy * 0.035); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRings() {
+    ctx.save();
+    for (const r of rings) {
+      const k = r.t / r.dur, rad = r.r0 + (r.max - r.r0) * (1 - (1 - k) * (1 - k));
+      ctx.globalAlpha = Math.max(0, 1 - k);
+      ctx.strokeStyle = r.color; ctx.shadowColor = r.color; ctx.shadowBlur = 14;
+      ctx.lineWidth = 3 * (1 - k) + 0.5;
+      ctx.beginPath(); ctx.arc(r.x, r.y, Math.max(0.1, rad), 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawDebris() {
+    ctx.save();
+    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.shadowBlur = 10;
+    for (const d of debris) {
+      const c = Math.cos(d.a) * d.len / 2, s = Math.sin(d.a) * d.len / 2;
+      ctx.globalAlpha = Math.min(1, d.life);
+      ctx.strokeStyle = d.color; ctx.shadowColor = d.color;
+      ctx.beginPath(); ctx.moveTo(d.x - c, d.y - s); ctx.lineTo(d.x + c, d.y + s); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawTexts() {
+    ctx.save();
+    for (const t of texts) { ctx.globalAlpha = Math.min(1, t.life * 1.5); neonText(t.s, t.x, t.y, t.color, t.size, 'center', 10); }
+    ctx.restore();
+  }
+
+  function drawFrame() {
+    const m = 8, L = 28;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,240,255,.35)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(m, m + L); ctx.lineTo(m, m); ctx.lineTo(m + L, m);
+    ctx.moveTo(W - m - L, m); ctx.lineTo(W - m, m); ctx.lineTo(W - m, m + L);
+    ctx.moveTo(m, H - m - L); ctx.lineTo(m, H - m); ctx.lineTo(m + L, H - m);
+    ctx.moveTo(W - m - L, H - m); ctx.lineTo(W - m, H - m); ctx.lineTo(W - m, H - m - L);
+    ctx.stroke();
+    neonText('SYS://NEON-OS v2.077', W - 24, H - 22, 'rgba(0,240,255,.45)', 11, 'right', 0);
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    ctx.save();
+    neonText('POÄNG', 24, 22, C.pink, 12, 'left', 6);
+    neonText(pad(score), 24, 44, C.cyan, 26, 'left', 14);
+    neonText('REKORD ' + pad(hi), W / 2, 22, C.purple, 13, 'center', 6);
+    neonText('VÅG ' + wave, W / 2, 42, C.yellow, 15, 'center', 8);
+    neonText('LIV', W - 24, 22, C.pink, 12, 'right', 6);
+    for (let i = 0; i < Math.min(lives, 5); i++) drawShip(W - 32 - i * 26, 46, -Math.PI / 2, 0.62, false);
+    if (lives > 5) neonText('+' + (lives - 5), W - 156, 46, C.cyan, 16, 'right', 8);
+    neonText('P PAUS · M LJUD ' + (muted ? 'AV' : 'PÅ'), 24, H - 22, 'rgba(185,103,255,.7)', 12, 'left', 0);
+    ctx.restore();
+  }
+
+  function drawTitle() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(2,0,10,.35)'; ctx.fillRect(0, 0, W, H);
+    const size = Math.min(80, W / 11), ty = H * 0.27;
+    glitchText('NEON//ASTEROIDS', W / 2, ty, size, C.pink);
+    neonText('> RENSA SEKTORN FRÅN ASTEROIDER' + (Math.floor(time * 2) % 2 ? '_' : ' '), W / 2, ty + size * 0.85, C.cyan, 16, 'center', 10);
+    [['← →', 'SVÄNG'], ['↑', 'GAS'], ['↓', 'BROMSA'], ['MELLANSLAG', 'SKJUT'], ['P / M', 'PAUS / LJUD']].forEach(([k, v], i) => {
+      const y = H * 0.46 + i * 26;
+      neonText(k, W / 2 - 14, y, C.yellow, 16, 'right', 8);
+      neonText(v, W / 2 + 14, y, C.purple, 16, 'left', 8);
+    });
+    if (Math.floor(time * 2.5) % 2 === 0) neonText('[ TRYCK MELLANSLAG FÖR ATT STARTA ]', W / 2, H * 0.76, C.cyan, 20, 'center', 16);
+    if (hi > 0) neonText('REKORD ' + pad(hi), W / 2, H * 0.83, C.pink, 14, 'center', 8);
+    ctx.restore();
+  }
+
+  function drawOver() {
+    ctx.save();
+    ctx.globalAlpha = Math.min(0.55, overT * 0.6);
+    ctx.fillStyle = '#02000a'; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+    const size = Math.min(96, W / 7), ty = H * 0.34;
+    glitchText('GAME OVER', W / 2, ty, size, C.pink);
+    neonText('// SIGNAL FÖRLORAD //', W / 2, ty + size * 0.8, C.cyan, 16, 'center', 10);
+    neonText('POÄNG ' + pad(score), W / 2, H * 0.55, C.yellow, 28, 'center', 14);
+    if (newRecord && Math.floor(time * 3) % 2 === 0) neonText('NYTT REKORD!', W / 2, H * 0.62, C.green, 22, 'center', 16);
+    if (overT > 1 && Math.floor(time * 2.5) % 2 === 0) neonText('[ TRYCK ENTER FÖR ATT SPELA IGEN ]', W / 2, H * 0.74, C.cyan, 20, 'center', 16);
+    ctx.restore();
+  }
+
+  function drawPause() {
+    ctx.save();
+    ctx.fillStyle = 'rgba(2,0,10,.6)'; ctx.fillRect(0, 0, W, H);
+    glitchText('PAUS', W / 2, H * 0.42, 72, C.cyan);
+    neonText('TRYCK P FÖR ATT FORTSÄTTA', W / 2, H * 0.42 + 64, C.pink, 18, 'center', 10);
+    ctx.restore();
+  }
+
+  function drawBanner() {
+    const k = banner.t / banner.max;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, (1 - k) * 5, k * 3));
+    glitchText(banner.text, W / 2, H * 0.4, Math.min(64, W / 9), C.cyan);
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; ctx.shadowBlur = 0;
+    drawBackground();
+
+    ctx.save();
+    if (shake > 0 && !paused) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+    drawRings(); drawAsteroids(); drawBullets(); drawParticles(); drawDebris();
+    if (state === 'play' && ship.alive) {
+      drawShip(ship.x, ship.y, ship.a, 1, ship.thrust);
+      if (ship.inv > 0 && (ship.inv > 0.7 || Math.floor(time * 14) % 2 === 0)) {   // sköld vid respawn
+        ctx.save();
+        ctx.globalAlpha = 0.45 + 0.25 * Math.sin(time * 10);
+        ctx.strokeStyle = C.cyan; ctx.shadowColor = C.cyan; ctx.shadowBlur = 12; ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 5]); ctx.lineDashOffset = -time * 40;
+        ctx.beginPath(); ctx.arc(ship.x, ship.y, 26, 0, TAU); ctx.stroke();
+        ctx.restore();
+      }
+    }
+    drawTexts();
+    ctx.restore();
+
+    drawFrame();
+    if (state !== 'title') drawHUD();
+    if (state === 'title') drawTitle();
+    if (state === 'over') drawOver();
+    if (state === 'play' && banner.t > 0) drawBanner();
+    if (paused) drawPause();
+    if (glitch > 0 && !paused) glitchSlices(7, 28);
+    else if (state !== 'play' && Math.random() < 0.025) glitchSlices(2, 10);
+  }
+
+  /* ===== Huvudloop ===== */
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now; time += dt;
+    if (!paused) update(dt);
+    const want = state === 'play' && !paused && ship.alive && ship.thrust && !muted;
+    if (thrustGain && want !== thrustOn) {
+      thrustOn = want;
+      thrustGain.gain.setTargetAtTime(want ? 0.07 : 0, actx.currentTime, 0.04);
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  /* ===== Styrning ===== */
+  window.addEventListener('keydown', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+    keys[e.code] = true;
+    initAudio();
+    if (e.repeat) return;
+    const go = e.code === 'Space' || e.code === 'Enter';
+    if (state === 'title' && go) startGame();
+    else if (state === 'over' && go && overT > 1) startGame();
+    else if (state === 'play' && (e.code === 'KeyP' || e.code === 'Escape')) paused = !paused;
+    if (e.code === 'KeyM') muted = !muted;
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+  window.addEventListener('blur', () => {
+    for (const k in keys) keys[k] = false;
+    if (state === 'play') paused = true;
+    if (actx) actx.suspend();
+  });
+  window.addEventListener('resize', resize);
+
+  /* ===== Start ===== */
+  resize();
+  for (let i = 0; i < 7; i++) asteroids.push(makeAsteroid(rand(0, W), rand(0, H), 1 + Math.floor(Math.random() * 3)));
+  requestAnimationFrame(t => { last = t; frame(t); });
+})();
+</script>
+</body>
+</html>

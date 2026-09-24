@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<title>NEON ASTEROIDS // 2077</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #05010d;
+    overflow: hidden;
+    font-family: "Courier New", monospace;
+  }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  let W, H;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---------- Färger ----------
+  const NEON = {
+    cyan: '#00f0ff',
+    pink: '#ff2bd6',
+    purple: '#9d4dff',
+    yellow: '#f9f002',
+    green: '#39ff14',
+    orange: '#ff7a00'
+  };
+  const ASTEROID_COLORS = [NEON.pink, NEON.purple, NEON.orange, NEON.green];
+
+  // ---------- Input ----------
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+      e.preventDefault();
+    }
+    keys[e.code] = true;
+    if ((e.code === 'Space' || e.code === 'Enter') && state !== 'play') {
+      startGame();
+      keys['Space'] = false;
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  // ---------- Spelvariabler ----------
+  let state = 'start';
+  let ship, bullets, asteroids, particles;
+  let score = 0, lives = 3, level = 1;
+  let highScore = Number(localStorage.getItem('neonAsteroidsHigh') || 0);
+  let shootCooldown = 0;
+  let gridOffset = 0;
+  let shake = 0;
+
+  const stars = Array.from({ length: 120 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    s: Math.random() * 1.5 + 0.3,
+    tw: Math.random() * Math.PI * 2
+  }));
+
+  function newShip() {
+    return {
+      x: W / 2, y: H / 2,
+      vx: 0, vy: 0,
+      a: -Math.PI / 2,
+      r: 14,
+      invuln: 2.5,
+      thrusting: false
+    };
+  }
+
+  function makeAsteroid(x, y, r) {
+    const n = 8 + Math.floor(Math.random() * 5);
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      pts.push(0.7 + Math.random() * 0.4);
+    }
+    const speed = (40 + Math.random() * 60) * (1 + level * 0.1) * (50 / r) ** 0.4;
+    const dir = Math.random() * Math.PI * 2;
+    return {
+      x, y, r,
+      vx: Math.cos(dir) * speed,
+      vy: Math.sin(dir) * speed,
+      rot: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 1.5,
+      pts,
+      color: ASTEROID_COLORS[Math.floor(Math.random() * ASTEROID_COLORS.length)]
+    };
+  }
+
+  function spawnWave() {
+    const count = 3 + level;
+    for (let i = 0; i < count; i++) {
+      let x, y;
+      do {
+        x = Math.random() * W;
+        y = Math.random() * H;
+      } while (ship && Math.hypot(x - ship.x, y - ship.y) < 200);
+      asteroids.push(makeAsteroid(x, y, 50));
+    }
+  }
+
+  function startGame() {
+    score = 0;
+    lives = 3;
+    level = 1;
+    bullets = [];
+    asteroids = [];
+    particles = [];
+    ship = newShip();
+    spawnWave();
+    state = 'play';
+  }
+
+  function explode(x, y, color, count, speed = 200) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = Math.random() * speed;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        life: 0.5 + Math.random() * 0.6,
+        max: 1.1,
+        color
+      });
+    }
+  }
+
+  function wrap(o) {
+    if (o.x < -o.r) o.x += W + o.r * 2;
+    if (o.x > W + o.r) o.x -= W + o.r * 2;
+    if (o.y < -o.r) o.y += H + o.r * 2;
+    if (o.y > H + o.r) o.y -= H + o.r * 2;
+  }
+
+  // ---------- Uppdatering ----------
+  function update(dt) {
+    gridOffset = (gridOffset + dt * 40) % 40;
+    if (shake > 0) shake = Math.max(0, shake - dt * 30);
+
+    // Partiklar uppdateras alltid (även efter game over)
+    if (particles) {
+      for (const p of particles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.97;
+        p.vy *= 0.97;
+        p.life -= dt;
+      }
+      particles = particles.filter(p => p.life > 0);
+    }
+
+    if (state !== 'play') return;
+
+    // Skepp
+    const ROT = 4.5, THRUST = 320, FRICTION = 0.99, MAX = 450;
+    if (keys['ArrowLeft']) ship.a -= ROT * dt;
+    if (keys['ArrowRight']) ship.a += ROT * dt;
+    ship.thrusting = !!keys['ArrowUp'];
+    if (ship.thrusting) {
+      ship.vx += Math.cos(ship.a) * THRUST * dt;
+      ship.vy += Math.sin(ship.a) * THRUST * dt;
+      // Motorflamma
+      if (Math.random() < 0.7) {
+        const bx = ship.x - Math.cos(ship.a) * ship.r;
+        const by = ship.y - Math.sin(ship.a) * ship.r;
+        particles.push({
+          x: bx, y: by,
+          vx: -Math.cos(ship.a) * 150 + (Math.random() - 0.5) * 60,
+          vy: -Math.sin(ship.a) * 150 + (Math.random() - 0.5) * 60,
+          life: 0.3, max: 0.3,
+          color: Math.random() < 0.5 ? NEON.yellow : NEON.pink
+        });
+      }
+    }
+    if (keys['ArrowDown']) {
+      ship.vx *= 0.94;
+      ship.vy *= 0.94;
+    }
+    ship.vx *= FRICTION;
+    ship.vy *= FRICTION;
+    const sp = Math.hypot(ship.vx, ship.vy);
+    if (sp > MAX) {
+      ship.vx *= MAX / sp;
+      ship.vy *= MAX / sp;
+    }
+    ship.x += ship.vx * dt;
+    ship.y += ship.vy * dt;
+    wrap(ship);
+    if (ship.invuln > 0) ship.invuln -= dt;
+
+    // Skjuta
+    shootCooldown -= dt;
+    if (keys['Space'] && shootCooldown <= 0) {
+      shootCooldown = 0.18;
+      const BS = 600;
+      bullets.push({
+        x: ship.x + Math.cos(ship.a) * ship.r,
+        y: ship.y + Math.sin(ship.a) * ship.r,
+        vx: Math.cos(ship.a) * BS + ship.vx,
+        vy: Math.sin(ship.a) * BS + ship.vy,
+        life: 1.1,
+        r: 2
+      });
+    }
+
+    // Skott
+    for (const b of bullets) {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.life -= dt;
+      wrap(b);
+    }
+    bullets = bullets.filter(b => b.life > 0);
+
+    // Asteroider
+    for (const a of asteroids) {
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      a.rot += a.spin * dt;
+      wrap(a);
+    }
+
+    // Kollision skott–asteroid
+    const newAsteroids = [];
+    for (let i = asteroids.length - 1; i >= 0; i--) {
+      const a = asteroids[i];
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.hypot(a.x - b.x, a.y - b.y) < a.r * 0.9) {
+          bullets.splice(j, 1);
+          asteroids.splice(i, 1);
+          explode(a.x, a.y, a.color, Math.floor(a.r / 2) + 6);
+          score += a.r >= 50 ? 20 : a.r >= 25 ? 50 : 100;
+          shake = Math.max(shake, a.r / 8);
+          if (a.r > 15) {
+            const nr = a.r / 2;
+            newAsteroids.push(makeAsteroid(a.x, a.y, nr));
+            newAsteroids.push(makeAsteroid(a.x, a.y, nr));
+          }
+          break;
+        }
+      }
+    }
+    asteroids.push(...newAsteroids);
+
+    // Kollision skepp–asteroid
+    if (ship.invuln <= 0) {
+      for (const a of asteroids) {
+        if (Math.hypot(a.x - ship.x, a.y - ship.y) < a.r * 0.85 + ship.r * 0.7) {
+          explode(ship.x, ship.y, NEON.cyan, 40, 280);
+          explode(ship.x, ship.y, NEON.yellow, 20, 180);
+          shake = 12;
+          lives--;
+          if (lives <= 0) {
+            state = 'over';
+            if (score > highScore) {
+              highScore = score;
+              localStorage.setItem('neonAsteroidsHigh', highScore);
+            }
+          } else {
+            ship = newShip();
+          }
+          break;
+        }
+      }
+    }
+
+    // Ny våg
+    if (asteroids.length === 0) {
+      level++;
+      ship.invuln = Math.max(ship.invuln, 1.5);
+      spawnWave();
+    }
+  }
+
+  // ---------- Rendering ----------
+  function glow(color, blur = 15) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = blur;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+  }
+
+  function drawBackground(t) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#05010d');
+    g.addColorStop(0.6, '#0d0221');
+    g.addColorStop(1, '#1a0433');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Stjärnor
+    ctx.shadowBlur = 0;
+    for (const s of stars) {
+      const a = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.001 + s.tw));
+      ctx.fillStyle = `rgba(200,220,255,${a})`;
+      ctx.fillRect(s.x * W, s.y * H, s.s, s.s);
+    }
+
+    // Perspektivrutnät i nederkant
+    const horizon = H * 0.62;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,43,214,0.25)';
+    ctx.shadowColor = NEON.pink;
+    ctx.shadowBlur = 6;
+    // Horisontella linjer
+    for (let i = 0; i < 20; i++) {
+      const p = ((i * 40 + gridOffset) / 800);
+      const y = horizon + (H - horizon) * p * p * 1.0;
+      if (y > H) continue;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+    // Vertikala linjer
+    const cx = W / 2;
+    for (let i = -20; i <= 20; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + i * 20, horizon);
+      ctx.lineTo(cx + i * 160, H);
+      ctx.stroke();
+    }
+    // Horisontlinje
+    ctx.strokeStyle = 'rgba(0,240,255,0.5)';
+    ctx.shadowColor = NEON.cyan;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(0, horizon);
+    ctx.lineTo(W, horizon);
+    ctx.stroke();
+    ctx.restore();
+
+    // Scanlines
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    for (let y = 0; y < H; y += 3) ctx.fillRect(0, y, W, 1);
+  }
+
+  function drawShip() {
+    if (ship.invuln > 0 && Math.floor(ship.invuln * 10) % 2 === 0) return;
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.rotate(ship.a);
+    glow(NEON.cyan, 20);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ship.r, 0);
+    ctx.lineTo(-ship.r, -ship.r * 0.75);
+    ctx.lineTo(-ship.r * 0.55, 0);
+    ctx.lineTo(-ship.r, ship.r * 0.75);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(0,240,255,0.15)';
+    ctx.fill();
+    // Cockpit
+    glow(NEON.pink, 10);
+    ctx.beginPath();
+    ctx.arc(ship.r * 0.15, 0, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawAsteroid(a) {
+    ctx.save();
+    ctx.translate(a.x, a.y);
+    ctx.rotate(a.rot);
+    glow(a.color, 18);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const n = a.pts.length;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2;
+      const rr = a.r * a.pts[i];
+      const x = Math.cos(ang) * rr, y = Math.sin(ang) * rr;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.globalAlpha = 0.08;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawText(text, x, y, size, color, align = 'left') {
+    ctx.save();
+    ctx.font = `bold ${size}px "Courier New", monospace`;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'middle';
+    glow(color, 18);
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    drawText(`POÄNG: ${String(score).padStart(6, '0')}`, 20, 30, 22, NEON.cyan);
+    drawText(`NIVÅ ${level}`, W / 2, 30, 22, NEON.yellow, 'center');
+    drawText(`REKORD: ${highScore}`, W - 20, 30, 18, NEON.purple, 'right');
+
+    // Liv som små skepp
+    drawText('LIV:', 20, 62, 18, NEON.pink);
+    for (let i = 0; i < lives; i++) {
+      ctx.save();
+      ctx.translate(80 + i * 26, 62);
+      ctx.rotate(-Math.PI / 2);
+      glow(NEON.pink, 12);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(9, 0);
+      ctx.lineTo(-9, -7);
+      ctx.lineTo(-5, 0);
+      ctx.lineTo(-9, 7);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function render(t) {
+    ctx.save();
+    if (shake > 0) {
+      ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    }
+    drawBackground(t);
+
+    if (asteroids) asteroids.forEach(drawAsteroid);
+
+    if (bullets) {
+      for (const b of bullets) {
+        glow(NEON.yellow, 15);
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r + 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    if (particles) {
+      for (const p of particles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.life / p.max);
+        glow(p.color, 10);
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+        ctx.restore();
+      }
+    }
+
+    if (state === 'play') drawShip();
+    ctx.restore();
+
+    if (state !== 'start') drawHUD();
+
+    const pulse = 0.6 + 0.4 * Math.sin(t * 0.005);
+    if (state === 'start') {
+      drawText('NEON ASTEROIDS', W / 2, H / 2 - 70, Math.min(64, W / 11), NEON.pink, 'center');
+      drawText('// 2077 //', W / 2, H / 2 - 20, 22, NEON.cyan, 'center');
+      drawText('← → SVÄNG   ↑ GAS   ↓ BROMS   MELLANSLAG SKJUT', W / 2, H / 2 + 30, Math.min(18, W / 40), NEON.purple, 'center');
+      ctx.globalAlpha = pulse;
+      drawText('TRYCK MELLANSLAG FÖR ATT STARTA', W / 2, H / 2 + 80, 22, NEON.yellow, 'center');
+      ctx.globalAlpha = 1;
+    } else if (state === 'over') {
+      drawText('SYSTEM FAILURE', W / 2, H / 2 - 50, Math.min(60, W / 12), NEON.pink, 'center');
+      drawText(`SLUTPOÄNG: ${score}`, W / 2, H / 2 + 5, 26, NEON.cyan, 'center');
+      ctx.globalAlpha = pulse;
+      drawText('TRYCK MELLANSLAG FÖR ATT SPELA IGEN', W / 2, H / 2 + 60, 20, NEON.yellow, 'center');
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---------- Spelloop ----------
+  let last = performance.now();
+  function loop(t) {
+    const dt = Math.min(0.05, (t - last) / 1000);
+    last = t;
+    update(dt);
+    render(t);
+    requestAnimationFrame(loop);
+  }
+
+  // Bakgrundsasteroider på startskärmen
+  bullets = [];
+  particles = [];
+  asteroids = [];
+  for (let i = 0; i < 5; i++) {
+    asteroids.push(makeAsteroid(Math.random() * W, Math.random() * H, 50));
+  }
+  const origUpdate = update;
+  update = function (dt) {
+    origUpdate(dt);
+    if (state !== 'play') {
+      for (const a of asteroids) {
+        a.x += a.vx * dt;
+        a.y += a.vy * dt;
+        a.rot += a.spin * dt;
+        wrap(a);
+      }
+    }
+  };
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
