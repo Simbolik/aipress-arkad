@@ -16,6 +16,9 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 
 | Modell | Tankenivå | Resultat | Tid | Kostnad | Källkod | Spela |
 |---|---|---|---:|---:|---|---|
+| Claude Sonnet 5.5 | medium | 🔴 Fungerar inte, allt går 2,4 gånger för fort vid 144 Hz | 29 s | 0,058 dollar | [medium.html](claude-sonnet-5-5/medium.html) | |
+| Claude Sonnet 5.5 | high | 🔴 Fungerar inte, allt går 2,4 gånger för fort vid 144 Hz | 29 s | 0,063 dollar | [high.html](claude-sonnet-5-5/high.html) | |
+| Claude Sonnet 5.5 | xhigh | Fungerar | 3 min 2 s | 0,323 dollar | [xhigh.html](claude-sonnet-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-sonnet-5-5-sonnet-asteroid.html) |
 | Claude Opus 5.5 | medium | 🟠 Fungerar, men skeppet blir trögare vid 144 Hz | 54 s | 0,154 dollar | [medium.html](claude-opus-5-5/medium.html) | |
 | Claude Opus 5.5 | high | Fungerar | 1 min 38 s | 0,254 dollar | [high.html](claude-opus-5-5/high.html) | |
 | Claude Opus 5.5 | xhigh | Fungerar | 7 min 10 s | 1,144 dollar | [xhigh.html](claude-opus-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-opus-5-5-opus-asteroid.html) |
@@ -30,7 +33,7 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | Grok 4.7 | high | 🔴 Kraschar vid start | 52 s | 0,033 dollar | [high.html](grok-4-7/high.html) | |
 | Grok 4.7 | xhigh | 🟠 Fungerar vid 60 Hz, men är slut efter drygt en sekund vid 144 Hz | 34 s | 0,021 dollar | [xhigh.html](grok-4-7/xhigh.html) | [Spela](https://aipress.se/files/posts/grok-4-7-grok-asteroid.html) |
 
-Sex av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
+Sju av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
 
 ## Vad testerna visade
 
