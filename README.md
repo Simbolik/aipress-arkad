@@ -18,7 +18,7 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 |---|---|---|---:|---:|---|---|
 | Claude Sonnet 5.5 | medium | 🔴 Fungerar inte, allt går 2,4 gånger för fort vid 144 Hz | 29 s | 0,058 dollar | [medium.html](claude-sonnet-5-5/medium.html) | |
 | Claude Sonnet 5.5 | high | 🔴 Fungerar inte, allt går 2,4 gånger för fort vid 144 Hz | 29 s | 0,063 dollar | [high.html](claude-sonnet-5-5/high.html) | |
-| Claude Sonnet 5.5 | xhigh | Fungerar | 3 min 2 s | 0,323 dollar | [xhigh.html](claude-sonnet-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-sonnet-5-5-sonnet-asteroid.html) |
+| Claude Sonnet 5.5 | xhigh | 🟠 Fungerar, men skeppet tappar alla liv inom 20 s om det står still | 3 min 2 s | 0,323 dollar | [xhigh.html](claude-sonnet-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-sonnet-5-5-sonnet-asteroid.html) |
 | Claude Opus 5.5 | medium | 🟠 Fungerar, men skeppet blir trögare vid 144 Hz | 54 s | 0,154 dollar | [medium.html](claude-opus-5-5/medium.html) | |
 | Claude Opus 5.5 | high | Fungerar | 1 min 38 s | 0,254 dollar | [high.html](claude-opus-5-5/high.html) | |
 | Claude Opus 5.5 | xhigh | Fungerar | 7 min 10 s | 1,144 dollar | [xhigh.html](claude-opus-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-opus-5-5-opus-asteroid.html) |
