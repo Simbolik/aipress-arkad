@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NEON // ASTEROIDS</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      color: #bfffff;
+      background: radial-gradient(ellipse at center, #17102f, #050711 75%);
+      font-family: "Courier New", monospace;
+    }
+    main { width: min(100%, 960px); }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(18px, 4vw, 30px);
+      letter-spacing: 3px;
+      color: #00fff0;
+      text-shadow: 0 0 18px #00fff080;
+    }
+    .tag { color: #ff46d4; font-size: 12px; letter-spacing: 2px; }
+    .arena {
+      position: relative;
+      border: 1px solid #00fff080;
+      box-shadow: 0 0 30px #00fff018, 0 0 60px #ff00aa10;
+      overflow: hidden;
+      background: #060914;
+    }
+    canvas { display: block; width: 100%; aspect-ratio: 900 / 620; }
+    .hud {
+      position: absolute;
+      inset: 16px 18px auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      pointer-events: none;
+      font-size: clamp(12px, 2vw, 17px);
+      text-shadow: 0 0 10px #00fff0;
+    }
+    #lives { color: #ff46d4; text-shadow: 0 0 10px #ff46d4; }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 18px;
+      text-align: center;
+      padding: 20px;
+      background: #050711d9;
+    }
+    .overlay[hidden] { display: none; }
+    .overlay h2 {
+      margin: 0;
+      color: #ff46d4;
+      font-size: clamp(28px, 7vw, 60px);
+      text-shadow: 0 0 25px #ff46d4;
+      letter-spacing: 5px;
+    }
+    .overlay p { margin: 0; line-height: 1.6; }
+    button {
+      padding: 13px 24px;
+      border: 1px solid #00fff0;
+      background: #00fff012;
+      color: #00fff0;
+      font: bold 16px "Courier New", monospace;
+      cursor: pointer;
+      box-shadow: 0 0 18px #00fff025;
+    }
+    button:hover, button:focus-visible { background: #00fff030; }
+    footer {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 13px;
+      line-height: 1.7;
+      color: #9598b7;
+    }
+    kbd { color: #e9ffff; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>NEON // ASTEROIDS</h1>
+      <span class="tag">SECTOR 2077</span>
+    </header>
+    <div class="arena">
+      <canvas id="game" aria-label="Rymdspel: styr med piltangenterna och skjut med mellanslag"></canvas>
+      <div class="hud">
+        <span>POÄNG <b id="score">0</b></span>
+        <span>REKORD <b id="best">0</b></span>
+        <span id="lives">LIV ◆ ◆ ◆</span>
+      </div>
+      <div class="overlay" id="overlay" hidden>
+        <h2 id="title">GAME OVER</h2>
+        <p id="message"></p>
+        <button id="restart" type="button">SPELA IGEN [ENTER]</button>
+      </div>
+    </div>
+    <footer>
+      <kbd>← ↑ ↓ →</kbd> Styr &nbsp; · &nbsp;
+      <kbd>MELLANSLAG</kbd> Skjut / håll för automateld &nbsp; · &nbsp;
+      <kbd>P</kbd> Pausa
+    </footer>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const scoreEl = document.getElementById("score");
+      const livesEl = document.getElementById("lives");
+      const bestEl = document.getElementById("best");
+      const overlay = document.getElementById("overlay");
+      const titleEl = document.getElementById("title");
+      const messageEl = document.getElementById("message");
+      const restart = document.getElementById("restart");
+
+      const W = 900, H = 620;
+      const keys = new Set();
+      const random = (a, b) => a + Math.random() * (b - a);
+      let best = 0;
+      try { best = Number(localStorage.getItem("neon-asteroids-best")) || 0; } catch {}
+      bestEl.textContent = best;
+
+      let ship, bullets, rocks, particles, score, lives;
+      let elapsed, spawnTimer, fireTimer, ended, paused;
+      let lastTime = performance.now();
+      const stars = Array.from({ length: 100 }, () => ({
+        x: random(0, W), y: random(0, H),
+        size: random(0.5, 1.8), speed: random(15, 65)
+      }));
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.round(canvas.clientWidth * dpr);
+        canvas.height = Math.round(canvas.clientHeight * dpr);
+        ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+      }
+      window.addEventListener("resize", resize);
+      resize();
+
+      function updateHUD() {
+        scoreEl.textContent = score;
+        livesEl.textContent = "LIV " + "◆ ".repeat(lives) + "◇ ".repeat(3 - lives);
+        if (score > best) {
+          best = score;
+          bestEl.textContent = best;
+          try { localStorage.setItem("neon-asteroids-best", best); } catch {}
+        }
+      }
+
+      function reset() {
+        ship = { x: W / 2, y: H - 80, r: 15, invincible: 1.5 };
+        bullets = [];
+        rocks = [];
+        particles = [];
+        score = 0;
+        lives = 3;
+        elapsed = 0;
+        spawnTimer = 0.5;
+        fireTimer = 0;
+        ended = false;
+        paused = false;
+        keys.clear();
+        overlay.hidden = true;
+        updateHUD();
+      }
+
+      function setPaused(value) {
+        if (ended) return;
+        paused = value;
+        keys.clear();
+        overlay.hidden = !value;
+        if (value) {
+          titleEl.textContent = "PAUS";
+          messageEl.textContent = "Tryck P eller klicka för att fortsätta.";
+          restart.textContent = "FORTSÄTT [P]";
+        }
+      }
+
+      function gameOver() {
+        ended = true;
+        keys.clear();
+        titleEl.textContent = "GAME OVER";
+        messageEl.textContent = `Slutpoäng: ${score} · Rekord: ${best}`;
+        restart.textContent = "SPELA IGEN [ENTER]";
+        overlay.hidden = false;
+      }
+
+      restart.addEventListener("click", () => paused ? setPaused(false) : reset());
+
+      window.addEventListener("keydown", e => {
+        if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(e.code)) {
+          e.preventDefault();
+          keys.add(e.code);
+        }
+        if (e.repeat) return;
+        if (e.code === "Enter" && ended) reset();
+        if (e.code === "KeyP") setPaused(!paused);
+      });
+      window.addEventListener("keyup", e => keys.delete(e.code));
+      window.addEventListener("blur", () => setPaused(true));
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) setPaused(true);
+      });
+
+      function burst(x, y, color, count = 22) {
+        for (let i = 0; i < count; i++) {
+          const angle = random(0, Math.PI * 2);
+          const speed = random(35, 220);
+          const life = random(0.25, 0.8);
+          particles.push({
+            x, y, vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life, maxLife: life, color, size: random(1, 3)
+          });
+        }
+      }
+
+      function spawnRock() {
+        const r = random(19, 45);
+        rocks.push({
+          x: random(r + 5, W - r - 5), y: -r - 10, r,
+          vx: random(-32, 32),
+          vy: random(65, 120) + Math.min(elapsed * 1.5, 160),
+          angle: random(0, Math.PI * 2), spin: random(-1.5, 1.5),
+          hp: r > 32 ? 2 : 1,
+          shape: Array.from({ length: 10 }, () => random(0.72, 1.12))
+        });
+      }
+
+      function update(dt) {
+        elapsed += dt;
+        fireTimer -= dt;
+        ship.invincible = Math.max(0, ship.invincible - dt);
+
+        let dx = Number(keys.has("ArrowRight")) - Number(keys.has("ArrowLeft"));
+        let dy = Number(keys.has("ArrowDown")) - Number(keys.has("ArrowUp"));
+        const length = Math.hypot(dx, dy) || 1;
+        ship.x = Math.max(22, Math.min(W - 22, ship.x + dx / length * 340 * dt));
+        ship.y = Math.max(65, Math.min(H - 25, ship.y + dy / length * 340 * dt));
+
+        if (keys.has("Space") && fireTimer <= 0) {
+          bullets.push({ x: ship.x, y: ship.y - 23 });
+          fireTimer = 0.14;
+        }
+
+        spawnTimer -= dt;
+        if (spawnTimer <= 0) {
+          spawnRock();
+          spawnTimer = Math.max(0.23, 0.85 - elapsed * 0.008);
+        }
+
+        for (const star of stars) {
+          star.y += star.speed * dt;
+          if (star.y > H) { star.y = 0; star.x = random(0, W); }
+        }
+        for (const bullet of bullets) bullet.y -= 660 * dt;
+
+        for (const rock of rocks) {
+          rock.x += rock.vx * dt;
+          rock.y += rock.vy * dt;
+          rock.angle += rock.spin * dt;
+          if (rock.x < rock.r || rock.x > W - rock.r) rock.vx *= -1;
+
+          for (const bullet of bullets) {
+            if (bullet.dead || rock.dead) continue;
+            if (Math.hypot(bullet.x - rock.x, bullet.y - rock.y) < rock.r + 4) {
+              bullet.dead = true;
+              rock.hp--;
+              burst(bullet.x, bullet.y, "#00fff0", 6);
+              if (rock.hp <= 0) {
+                rock.dead = true;
+                score += rock.r > 32 ? 30 : 15;
+                burst(rock.x, rock.y, "#ff46d4", 25);
+                updateHUD();
+              }
+            }
+          }
+
+          if (!rock.dead && ship.invincible <= 0 &&
+              Math.hypot(ship.x - rock.x, ship.y - rock.y) < rock.r * 0.85 + ship.r) {
+            rock.dead = true;
+            burst(rock.x, rock.y, "#ff46d4");
+            burst(ship.x, ship.y, "#00fff0", 30);
+            lives--;
+            ship.invincible = 2;
+            updateHUD();
+            if (lives <= 0) { gameOver(); break; }
+          }
+        }
+
+        bullets = bullets.filter(b => !b.dead && b.y > -20);
+        rocks = rocks.filter(r => !r.dead && r.y < H + r.r);
+        for (const p of particles) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.life -= dt;
+          p.vx *= Math.exp(-1.5 * dt);
+          p.vy *= Math.exp(-1.5 * dt);
+        }
+        particles = particles.filter(p => p.life > 0);
+      }
+
+      function draw() {
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#060914";
+        ctx.fillRect(0, 0, W, H);
+
+        const glow = ctx.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, 580);
+        glow.addColorStop(0, "#25103980");
+        glow.addColorStop(1, "#06091400");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.strokeStyle = "#ff46d41a";
+        ctx.lineWidth = 1;
+        const horizon = H * 0.67;
+        for (let x = -W; x <= W * 2; x += 90) {
+          ctx.beginPath();
+          ctx.moveTo(W / 2 + (x - W / 2) * 0.13, horizon);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+        for (let i = 0; i < 9; i++) {
+          const y = horizon + Math.pow((i + (elapsed * 0.35 % 1)) / 9, 2) * (H - horizon);
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+        }
+
+        for (const star of stars) {
+          ctx.fillStyle = star.size > 1.3 ? "#a7baff" : "#586180";
+          ctx.fillRect(star.x, star.y, star.size, star.size * 1.6);
+        }
+
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#00fff0";
+        ctx.fillStyle = "#bfffff";
+        for (const b of bullets) {
+          ctx.fillRect(b.x - 2, b.y - 12, 4, 17);
+        }
+
+        for (const rock of rocks) {
+          ctx.save();
+          ctx.translate(rock.x, rock.y);
+          ctx.rotate(rock.angle);
+          ctx.shadowColor = rock.hp > 1 ? "#ff46d4" : "#b875ff";
+          ctx.shadowBlur = 12;
+          ctx.strokeStyle = rock.hp > 1 ? "#ff46d4" : "#b875ff";
+          ctx.fillStyle = "#191027";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          rock.shape.forEach((factor, i) => {
+            const a = i / rock.shape.length * Math.PI * 2;
+            const x = Math.cos(a) * rock.r * factor;
+            const y = Math.sin(a) * rock.r * factor;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          });
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.shadowBlur = 0;
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath();
+          ctx.moveTo(-rock.r * 0.4, -rock.r * 0.2);
+          ctx.lineTo(rock.r * 0.15, rock.r * 0.1);
+          ctx.lineTo(rock.r * 0.4, -rock.r * 0.45);
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        if (!ended && !(ship.invincible > 0 && Math.floor(elapsed * 12) % 2)) {
+          ctx.save();
+          ctx.translate(ship.x, ship.y);
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = "#ff46d4";
+          ctx.fillStyle = "#ff46d4";
+          ctx.beginPath();
+          ctx.moveTo(-7, 16);
+          ctx.lineTo(0, 29 + Math.sin(elapsed * 45) * 7);
+          ctx.lineTo(7, 16);
+          ctx.closePath(); ctx.fill();
+
+          ctx.shadowColor = "#00fff0";
+          ctx.strokeStyle = "#00fff0";
+          ctx.fillStyle = "#0b2439";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, -24);
+          ctx.lineTo(19, 18);
+          ctx.lineTo(0, 10);
+          ctx.lineTo(-19, 18);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+          ctx.fillStyle = "#e0ffff";
+          ctx.fillRect(-2, -10, 4, 13);
+          ctx.restore();
+        }
+
+        for (const p of particles) {
+          ctx.globalAlpha = p.life / p.maxLife;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 10;
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+
+        ctx.fillStyle = "#ffffff03";
+        for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+      }
+
+      function frame(time) {
+        const dt = Math.min((time - lastTime) / 1000, 0.033);
+        lastTime = time;
+        if (!paused && !ended) update(dt);
+        draw();
+        requestAnimationFrame(frame);
+      }
+
+      reset();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
