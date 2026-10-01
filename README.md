@@ -29,15 +29,15 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | GPT-6 Sol | xhigh | Fungerar | 1 min 57 s | 0,086 dollar | [xhigh.html](gpt-6-sol/xhigh.html) | [Spela](https://aipress.se/files/posts/gpt-6-sol-neon-asteroids.html) |
 | GPT-6 Luna | medium | Fungerar | 1 min 7 s | 0,003 dollar | [medium.html](gpt-6-luna/medium.html) | [Spela](https://aipress.se/files/posts/gpt-6-luna-neon-asteroids.html) |
 | GPT-6 Astra | medium | Fungerar | 59 s | 0,217 dollar | [medium.html](gpt-6-astra/medium.html) | [Spela](https://aipress.se/files/posts/gpt-6-astra-neon-drift.html) |
-| GPT-6.1 Sol | medium | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 16,25 s vid 60 Hz och 20,54 s vid 144 Hz när en människa styr | 1 min 20 s | 0,044 dollar | [medium.html](gpt-6-1-sol/medium.html) | |
-| GPT-6.1 Sol | high | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 21,67 s vid 60 Hz och 16,46 s vid 144 Hz när en människa styr | 1 min 48 s | 0,061 dollar | [high.html](gpt-6-1-sol/high.html) | |
-| GPT-6.1 Sol | xhigh | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 18,35 s vid 60 Hz och 24,01 s vid 144 Hz när en människa styr | 4 min 48 s | 0,126 dollar | [xhigh.html](gpt-6-1-sol/xhigh.html) | |
-| GPT-6.1 Sol | max | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 26,93 s vid 60 Hz och 14,31 s vid 144 Hz när en människa styr | 8 min 10 s | 0,246 dollar | [max.html](gpt-6-1-sol/max.html) | |
+| GPT-6.1 Sol | medium | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 16,25 s vid 60 Hz och 20,54 s vid 144 Hz när en människa styr | 1 min 20 s | 0,044 dollar | [medium.html](gpt-6-1-sol/medium.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-medium.html) |
+| GPT-6.1 Sol | high | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 21,67 s vid 60 Hz och 16,46 s vid 144 Hz när en människa styr | 1 min 48 s | 0,061 dollar | [high.html](gpt-6-1-sol/high.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-high.html) |
+| GPT-6.1 Sol | xhigh | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 18,35 s vid 60 Hz och 24,01 s vid 144 Hz när en människa styr | 4 min 48 s | 0,126 dollar | [xhigh.html](gpt-6-1-sol/xhigh.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-xhigh.html) |
+| GPT-6.1 Sol | max | 🔴 Samma fart vid 60 och 144 Hz, men spelet är slut efter 26,93 s vid 60 Hz och 14,31 s vid 144 Hz när en människa styr | 8 min 10 s | 0,246 dollar | [max.html](gpt-6-1-sol/max.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-max.html) |
 | Grok 4.7 | medium | 🔴 Kraschar vid start | 45 s | 0,027 dollar | [medium.html](grok-4-7/medium.html) | |
 | Grok 4.7 | high | 🔴 Kraschar vid start | 52 s | 0,033 dollar | [high.html](grok-4-7/high.html) | |
 | Grok 4.7 | xhigh | 🟠 Fungerar vid 60 Hz, men är slut efter drygt en sekund vid 144 Hz | 34 s | 0,021 dollar | [xhigh.html](grok-4-7/xhigh.html) | [Spela](https://aipress.se/files/posts/grok-4-7-grok-asteroid.html) |
 
-Sex av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
+Tio av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
 
 ## Vad testerna visade
 
@@ -45,4 +45,4 @@ För Claude Opus 5.5 och GPT-6 Sol gav högre tankenivå mer påkostade spel med
 
 Grok 4.7 fick ett spel som startade först på sin högsta nivå, xhigh. På medium och high kraschade spelen redan på den första bildrutan, eftersom koden använde listorna med asteroider, skott och partiklar innan de hade skapats. Spelet från xhigh fungerar, men dess rörelser följer skärmens bildfrekvens i stället för verklig tid. På en skärm med 144 Hz går det därför 2,4 gånger för fort och är över efter drygt en sekund.
 
-Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/) och [Grok 4.7](https://aipress.se/nyheter/grok-4-7/).
+Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/), [Grok 4.7](https://aipress.se/nyheter/grok-4-7/) och [GPT-6.1 Sol](https://aipress.se/nyheter/gpt-6-1-sol/).
