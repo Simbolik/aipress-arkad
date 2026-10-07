@@ -22,7 +22,7 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | Claude Opus 5.5 | medium | 🟠 Fungerar, men skeppet blir trögare vid 144 Hz | 54 s | 0,154 dollar | [medium.html](claude-opus-5-5/medium.html) | |
 | Claude Opus 5.5 | high | Fungerar | 1 min 38 s | 0,254 dollar | [high.html](claude-opus-5-5/high.html) | |
 | Claude Opus 5.5 | xhigh | Fungerar | 7 min 10 s | 1,144 dollar | [xhigh.html](claude-opus-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-opus-5-5-opus-asteroid.html) |
-| Claude Haiku 5.5 | medium | Fungerar | 41 s | 0,006 dollar | [medium.html](claude-haiku-5-5/medium.html) | |
+| Claude Haiku 5.5 | medium | Fungerar | 41 s | 0,006 dollar | [medium.html](claude-haiku-5-5/medium.html) | [Spela](https://aipress.se/files/posts/claude-haiku-5-5-neon-asteroider.html) |
 | Claude Opus 5.5 | max | Fungerar | 29 min 44 s | 4,541 dollar | [max.html](claude-opus-5-5/max.html) | |
 | GPT-6 Sol | low | Fungerar | 53 s | 0,051 dollar | [low.html](gpt-6-sol/low.html) | |
 | GPT-6 Sol | medium | Fungerar | 56 s | 0,052 dollar | [medium.html](gpt-6-sol/medium.html) | |
@@ -38,7 +38,7 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | Grok 4.7 | high | 🔴 Kraschar vid start | 52 s | 0,033 dollar | [high.html](grok-4-7/high.html) | |
 | Grok 4.7 | xhigh | 🔴 Fungerar inte, spelet är för snabbt och går 2,4 gånger fortare vid 144 Hz | 34 s | 0,021 dollar | [xhigh.html](grok-4-7/xhigh.html) | [Spela](https://aipress.se/files/posts/grok-4-7-grok-asteroid.html) |
 
-Tio av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
+Elva av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
 
 ## Vad testerna visade
 
