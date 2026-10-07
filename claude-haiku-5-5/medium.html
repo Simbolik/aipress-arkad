@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Neon Asteroider</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #05000d;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  canvas {
+    background: #07001a;
+    border: 1px solid #ff00e6;
+    box-shadow: 0 0 30px #ff00e655, 0 0 70px #00f0ff33;
+    width: min(96vw, calc(96vh * 4 / 3));
+    height: auto;
+  }
+</style>
+</head>
+<body>
+<canvas id="c" width="800" height="600"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+const COLORS = {
+  cyan: '#00f0ff',
+  magenta: '#ff00e6',
+  yellow: '#fff200',
+  green: '#39ff14',
+  red: '#ff2a5f'
+};
+const FONT = '"Courier New", monospace';
+
+const keys = {};
+let state = 'menu';   // 'menu' | 'play' | 'over'
+let score = 0, lives = 3;
+let ship, bullets = [], rocks = [], parts = [];
+let spawnT = 0, fireCd = 0, t = 0;
+
+const stars = Array.from({ length: 120 }, () => ({
+  x: Math.random() * W,
+  y: Math.random() * H,
+  z: Math.random() * 2 + 0.3
+}));
+
+ship = { x: W / 2, y: H - 70, r: 12, inv: 0 };
+
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  if (e.code === 'Space' && state !== 'play') resetGame();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+function resetGame() {
+  ship.x = W / 2;
+  ship.y = H - 70;
+  ship.inv = 120;
+  bullets = [];
+  rocks = [];
+  parts = [];
+  score = 0;
+  lives = 3;
+  spawnT = 0;
+  fireCd = 0;
+  state = 'play';
+}
+
+function makeRock(size, x, y, vx, vy) {
+  const r = { 3: 48, 2: 28, 1: 14 }[size];
+  const n = 9 + Math.floor(Math.random() * 4);
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const k = 0.7 + Math.random() * 0.35;
+    pts.push([Math.cos(a) * r * k, Math.sin(a) * r * k]);
+  }
+  return { x, y, vx, vy, r, size, pts, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.05 };
+}
+
+function currentLevel() {
+  return 1 + Math.floor(score / 500);
+}
+
+function spawnRock() {
+  const side = Math.floor(Math.random() * 3);
+  let x, y;
+  if (side === 0) { x = Math.random() * W; y = -60; }
+  else if (side === 1) { x = -60; y = Math.random() * H * 0.6; }
+  else { x = W + 60; y = Math.random() * H * 0.6; }
+
+  const ang = Math.atan2(H * 0.5 - y, W * 0.5 - x) + (Math.random() - 0.5) * 1.0;
+  const sp = 0.8 + Math.random() * 0.8 + currentLevel() * 0.15;
+  rocks.push(makeRock(3, x, y, Math.cos(ang) * sp, Math.sin(ang) * sp));
+}
+
+function boom(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * 4 + 1;
+    parts.push({
+      x, y,
+      vx: Math.cos(a) * s,
+      vy: Math.sin(a) * s,
+      life: 40 + Math.random() * 20,
+      color
+    });
+  }
+}
+
+function destroyRock(j) {
+  const r = rocks[j];
+  rocks.splice(j, 1);
+  score += r.size === 3 ? 20 : r.size === 2 ? 50 : 100;
+  boom(r.x, r.y, COLORS.magenta, r.size * 6);
+  if (r.size > 1) {
+    for (let k = 0; k < 2; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 1.2 + Math.random() * 1.5;
+      rocks.push(makeRock(r.size - 1, r.x, r.y, Math.cos(a) * s, Math.sin(a) * s));
+    }
+  }
+}
+
+function update() {
+  t++;
+  stars.forEach(s => {
+    s.y += s.z;
+    if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+  });
+
+  if (state !== 'play') return;
+
+  // Skepp
+  const sp = 5.5;
+  if (keys.ArrowLeft)  ship.x -= sp;
+  if (keys.ArrowRight) ship.x += sp;
+  if (keys.ArrowUp)    ship.y -= sp;
+  if (keys.ArrowDown)  ship.y += sp;
+  ship.x = Math.max(ship.r, Math.min(W - ship.r, ship.x));
+  ship.y = Math.max(ship.r, Math.min(H - ship.r, ship.y));
+
+  if (ship.inv > 0) ship.inv--;
+  if (fireCd > 0) fireCd--;
+  if (keys.Space && fireCd === 0) {
+    bullets.push({ x: ship.x, y: ship.y - 14, vy: -10 });
+    fireCd = 14;
+  }
+
+  // Skott
+  bullets.forEach(b => b.y += b.vy);
+  bullets = bullets.filter(b => b.y > -10);
+
+  // Asteroider
+  rocks.forEach(r => {
+    r.x += r.vx;
+    r.y += r.vy;
+    r.rot += r.vr;
+  });
+  rocks = rocks.filter(r => r.x > -100 && r.x < W + 100 && r.y > -100 && r.y < H + 100);
+
+  // Skott mot asteroider
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    const b = bullets[i];
+    for (let j = rocks.length - 1; j >= 0; j--) {
+      const r = rocks[j];
+      if (Math.hypot(b.x - r.x, b.y - r.y) < r.r) {
+        bullets.splice(i, 1);
+        destroyRock(j);
+        break;
+      }
+    }
+  }
+
+  // Kollision skepp mot asteroid
+  if (ship.inv === 0) {
+    for (const r of rocks) {
+      if (Math.hypot(ship.x - r.x, ship.y - r.y) < ship.r + r.r * 0.8) {
+        lives--;
+        boom(ship.x, ship.y, COLORS.cyan, 30);
+        ship.inv = 120;
+        ship.x = W / 2;
+        ship.y = H - 70;
+        if (lives <= 0) state = 'over';
+        break;
+      }
+    }
+  }
+
+  // Spawna nya asteroider
+  spawnT--;
+  if (spawnT <= 0) {
+    spawnRock();
+    spawnT = Math.max(25, 70 - currentLevel() * 6);
+  }
+
+  // Partiklar
+  parts.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+  });
+  parts = parts.filter(p => p.life > 0);
+}
+
+function draw() {
+  // Bakgrund
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#07001a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Rutnät med rörelse
+  ctx.strokeStyle = 'rgba(255, 0, 230, 0.08)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  const off = (t * 0.5) % 40;
+  for (let y = off; y < H; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+
+  // Stjärnor
+  ctx.fillStyle = '#ffffff';
+  stars.forEach(s => {
+    ctx.globalAlpha = 0.3 + s.z / 2.5;
+    const sz = s.z > 1.5 ? 2 : 1;
+    ctx.fillRect(s.x, s.y, sz, sz);
+  });
+  ctx.globalAlpha = 1;
+
+  // Asteroider
+  rocks.forEach(r => {
+    const col = r.size === 3 ? COLORS.magenta : r.size === 2 ? COLORS.yellow : COLORS.cyan;
+    ctx.save();
+    ctx.translate(r.x, r.y);
+    ctx.rotate(r.rot);
+    ctx.strokeStyle = col;
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 12;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    r.pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // Skott
+  ctx.strokeStyle = COLORS.green;
+  ctx.shadowColor = COLORS.green;
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 3;
+  bullets.forEach(b => {
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(b.x, b.y + 12);
+    ctx.stroke();
+  });
+
+  // Partiklar
+  parts.forEach(p => {
+    ctx.globalAlpha = Math.max(0, p.life / 60);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(p.x, p.y, 3, 3);
+  });
+  ctx.globalAlpha = 1;
+
+  // Skepp
+  if (state === 'play' && (ship.inv === 0 || Math.floor(t / 6) % 2 === 0)) {
+    ctx.save();
+    ctx.translate(ship.x, ship.y);
+    ctx.strokeStyle = COLORS.cyan;
+    ctx.shadowColor = COLORS.cyan;
+    ctx.shadowBlur = 15;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -16);
+    ctx.lineTo(11, 12);
+    ctx.lineTo(0, 6);
+    ctx.lineTo(-11, 12);
+    ctx.closePath();
+    ctx.stroke();
+
+    if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
+      ctx.strokeStyle = COLORS.magenta;
+      ctx.shadowColor = COLORS.magenta;
+      ctx.beginPath();
+      ctx.moveTo(-5, 12);
+      ctx.lineTo(0, 18 + Math.random() * 6);
+      ctx.lineTo(5, 12);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // HUD
+  ctx.shadowBlur = 10;
+  ctx.font = `bold 20px ${FONT}`;
+  ctx.textBaseline = 'top';
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = COLORS.cyan;
+  ctx.shadowColor = COLORS.cyan;
+  ctx.fillText('POÄNG ' + String(score).padStart(6, '0'), 16, 14);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = COLORS.red;
+  ctx.shadowColor = COLORS.red;
+  ctx.fillText('LIV ' + '♥ '.repeat(Math.max(0, lives)).trim(), W - 16, 14);
+  ctx.shadowBlur = 0;
+
+  // Meny och game over
+  if (state !== 'play') {
+    ctx.fillStyle = 'rgba(5, 0, 13, 0.7)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.shadowColor = COLORS.magenta;
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = COLORS.magenta;
+    ctx.font = `bold 56px ${FONT}`;
+    ctx.fillText(state === 'menu' ? 'NEON ASTEROIDER' : 'GAME OVER', W / 2, H * 0.35);
+
+    ctx.shadowBlur = 12;
+    ctx.font = `20px ${FONT}`;
+    if (state === 'over') {
+      ctx.fillStyle = COLORS.cyan;
+      ctx.shadowColor = COLORS.cyan;
+      ctx.fillText('Poäng: ' + score, W / 2, H * 0.35 + 70);
+    }
+
+    ctx.fillStyle = COLORS.yellow;
+    ctx.shadowColor = COLORS.yellow;
+    ctx.fillText(
+      state === 'menu' ? 'Tryck MELLANSLAG för att starta' : 'Tryck MELLANSLAG för att spela igen',
+      W / 2, H * 0.55
+    );
+
+    ctx.fillStyle = COLORS.cyan;
+    ctx.shadowColor = COLORS.cyan;
+    ctx.fillText('Piltangenter: styr  |  Mellanslag: skjut', W / 2, H * 0.55 + 50);
+    ctx.shadowBlur = 0;
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>

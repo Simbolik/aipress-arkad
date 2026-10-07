@@ -22,6 +22,7 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | Claude Opus 5.5 | medium | 🟠 Fungerar, men skeppet blir trögare vid 144 Hz | 54 s | 0,154 dollar | [medium.html](claude-opus-5-5/medium.html) | |
 | Claude Opus 5.5 | high | Fungerar | 1 min 38 s | 0,254 dollar | [high.html](claude-opus-5-5/high.html) | |
 | Claude Opus 5.5 | xhigh | Fungerar | 7 min 10 s | 1,144 dollar | [xhigh.html](claude-opus-5-5/xhigh.html) | [Spela](https://aipress.se/files/posts/claude-opus-5-5-opus-asteroid.html) |
+| Claude Haiku 5.5 | medium | Fungerar | 41 s | 0,006 dollar | [medium.html](claude-haiku-5-5/medium.html) | |
 | Claude Opus 5.5 | max | Fungerar | 29 min 44 s | 4,541 dollar | [max.html](claude-opus-5-5/max.html) | |
 | GPT-6 Sol | low | Fungerar | 53 s | 0,051 dollar | [low.html](gpt-6-sol/low.html) | |
 | GPT-6 Sol | medium | Fungerar | 56 s | 0,052 dollar | [medium.html](gpt-6-sol/medium.html) | |
@@ -45,4 +46,4 @@ För Claude Opus 5.5 och GPT-6 Sol gav högre tankenivå mer påkostade spel med
 
 Grok 4.7 fick ett spel som startade först på sin högsta nivå, xhigh. På medium och high kraschade spelen redan på den första bildrutan, eftersom koden använde listorna med asteroider, skott och partiklar innan de hade skapats. Spelet från xhigh startar, men är för snabbt, och dess rörelser följer skärmens bildfrekvens i stället för verklig tid. På en skärm med 144 Hz går det därför 2,4 gånger för fort och är över efter drygt en sekund.
 
-Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/), [Grok 4.7](https://aipress.se/nyheter/grok-4-7/), [Claude Sonnet 5.5](https://aipress.se/nyheter/claude-sonnet-5-5/) och [GPT-6.1 Sol](https://aipress.se/nyheter/gpt-6-1-sol/).
+Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/), [Grok 4.7](https://aipress.se/nyheter/grok-4-7/), [Claude Sonnet 5.5](https://aipress.se/nyheter/claude-sonnet-5-5/), [GPT-6.1 Sol](https://aipress.se/nyheter/gpt-6-1-sol/) och [Claude Haiku 5.5](https://aipress.se/nyheter/claude-haiku-5-5/).
