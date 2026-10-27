@@ -40,8 +40,10 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | Grok 4.7 | xhigh | 🔴 Fungerar inte, spelet är för snabbt och går 2,4 gånger fortare vid 144 Hz | 34 s | 0,021 dollar | [xhigh.html](grok-4-7/xhigh.html) | [Spela](https://aipress.se/files/posts/grok-4-7-grok-asteroid.html) |
 | DeepSeek-V4.1-Flash-1017 | standard, tänkande läge | Fungerar | 43 s | 0,008 dollar (0,016 under högtrafik) | [standard.html](deepseek-v4-1-flash-1017/standard.html) | [Spela](https://aipress.se/files/posts/deepseek-v4-1-flash-1017-neon-asteroids.html) |
 | Kimi K3.1 Pro | max | Fungerar | 11 min 20 s | 0,223 dollar | [max.html](kimi-k3-1-pro/max.html) | [Spela](https://aipress.se/files/posts/kimi-k3-1-pro-neon-asteroid.html) |
+| Kimi K3.1 Pro | high | Fungerar | 3 min 1 s | 0,086 dollar | [high.html](kimi-k3-1-pro/high.html) | [Spela](https://aipress.se/files/posts/kimi-k3-1-pro-neon-asteroid-high.html) |
+| Kimi K3.1 Pro | low | Fungerar | 1 min 28 s | 0,057 dollar | [low.html](kimi-k3-1-pro/low.html) | [Spela](https://aipress.se/files/posts/kimi-k3-1-pro-neon-asteroids-low.html) |
 
-Fjorton av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
+Sexton av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
 
 ## Vad testerna visade
 
