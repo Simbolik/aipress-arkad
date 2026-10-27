@@ -34,12 +34,13 @@ Tankenivån styr hur mycket modellen får resonera innan den svarar. Tid anger h
 | GPT-6.1 Sol | high | Fungerar | 1 min 48 s | 0,061 dollar | [high.html](gpt-6-1-sol/high.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-high.html) |
 | GPT-6.1 Sol | xhigh | Fungerar | 4 min 48 s | 0,126 dollar | [xhigh.html](gpt-6-1-sol/xhigh.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-xhigh.html) |
 | GPT-6.1 Sol | max | Fungerar | 8 min 10 s | 0,246 dollar | [max.html](gpt-6-1-sol/max.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-sol-asteroid-max.html) |
+| GPT-6.1 Terra | medium | Fungerar | 53 s | 0,023 dollar | [medium.html](gpt-6-1-terra/medium.html) | [Spela](https://aipress.se/files/posts/gpt-6-1-terra-neon-drift.html) |
 | Grok 4.7 | medium | 🔴 Kraschar vid start | 45 s | 0,027 dollar | [medium.html](grok-4-7/medium.html) | |
 | Grok 4.7 | high | 🔴 Kraschar vid start | 52 s | 0,033 dollar | [high.html](grok-4-7/high.html) | |
 | Grok 4.7 | xhigh | 🔴 Fungerar inte, spelet är för snabbt och går 2,4 gånger fortare vid 144 Hz | 34 s | 0,021 dollar | [xhigh.html](grok-4-7/xhigh.html) | [Spela](https://aipress.se/files/posts/grok-4-7-grok-asteroid.html) |
 | DeepSeek-V4.1-Flash-1017 | standard, tänkande läge | Fungerar | 43 s | 0,008 dollar (0,016 under högtrafik) | [standard.html](deepseek-v4-1-flash-1017/standard.html) | [Spela](https://aipress.se/files/posts/deepseek-v4-1-flash-1017-neon-asteroids.html) |
 
-Tolv av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
+Tretton av spelen går att spela direkt på aipress.se. De andra kan du ladda ner och öppna i webbläsaren.
 
 ## Vad testerna visade
 
@@ -47,4 +48,4 @@ För Claude Opus 5.5 och GPT-6 Sol gav högre tankenivå mer påkostade spel med
 
 Grok 4.7 fick ett spel som startade först på sin högsta nivå, xhigh. På medium och high kraschade spelen redan på den första bildrutan, eftersom koden använde listorna med asteroider, skott och partiklar innan de hade skapats. Spelet från xhigh startar, men är för snabbt, och dess rörelser följer skärmens bildfrekvens i stället för verklig tid. På en skärm med 144 Hz går det därför 2,4 gånger för fort och är över efter drygt en sekund.
 
-Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/), [Grok 4.7](https://aipress.se/nyheter/grok-4-7/), [Claude Sonnet 5.5](https://aipress.se/nyheter/claude-sonnet-5-5/), [GPT-6.1 Sol](https://aipress.se/nyheter/gpt-6-1-sol/), [Claude Haiku 5.5](https://aipress.se/nyheter/claude-haiku-5-5/) och [DeepSeek-V4.1-Flash-1017](https://aipress.se/nyheter/deepseek-v4-1-flash-1017/).
+Hela testerna, med bedömningar och jämförelser mellan modellerna, finns i artiklarna om [Claude Opus 5.5](https://aipress.se/nyheter/claude-opus-5-5/), [GPT-6 Sol och Luna](https://aipress.se/nyheter/gpt-6-sol-och-luna/), [GPT-6 Astra](https://aipress.se/nyheter/gpt-6-astra/), [Grok 4.7](https://aipress.se/nyheter/grok-4-7/), [Claude Sonnet 5.5](https://aipress.se/nyheter/claude-sonnet-5-5/), [GPT-6.1 Sol](https://aipress.se/nyheter/gpt-6-1-sol/), [Claude Haiku 5.5](https://aipress.se/nyheter/claude-haiku-5-5/), [DeepSeek-V4.1-Flash-1017](https://aipress.se/nyheter/deepseek-v4-1-flash-1017/) och [GPT-6.1 Terra](https://aipress.se/nyheter/gpt-6-1-terra/).
